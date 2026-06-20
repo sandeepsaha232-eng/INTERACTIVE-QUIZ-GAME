@@ -1,316 +1,140 @@
-function toggleNav() {
-    const menu = document.getElementById('mainMenu');
-    menu.classList.toggle('show');
-}
+const startScreen = document.getElementById('startScreen')
+const quizScreen = document.getElementById('quizScreen')
+const resultsScreen = document.getElementById('resultsScreen')
+const startBtn = document.getElementById('startBtn')
+const nextBtn = document.getElementById('nextBtn')
+const retakeBtn = document.getElementById('retakeBtn')
+const homeBtn = document.getElementById('homeBtn')
+const questionNumber = document.getElementById('questionNumber')
+const currentScore = document.getElementById('currentScore')
+const questionText = document.getElementById('questionText')
+const feedbackMessage = document.getElementById('feedbackMessage')
+const optionsContainer = document.getElementById('optionsContainer')
+const progressFill = document.getElementById('progressFill')
+const finalScore = document.getElementById('finalScore')
+const resultMessage = document.getElementById('resultMessage')
+const correctCountEl = document.getElementById('correctCount')
+const totalCountEl = document.getElementById('totalCount')
+const scorePercentageEl = document.getElementById('scorePercentage')
 
-function jumpToQuiz() {
-    document.getElementById('landingPage').style.display = 'none';
-    document.getElementById('quizSection').style.display = 'flex';
-    document.getElementById('topNav').style.display = 'none';
-    window.scrollTo(0, 0);
-}
-
-function goHome() {
-    document.getElementById('landingPage').style.display = 'block';
-    document.getElementById('quizSection').style.display = 'none';
-    document.getElementById('topNav').style.display = 'block';
-    
-    clearQuizData();
-    resetConfigPanel();
-    
-    window.scrollTo(0, 0);
-}
-
-function beginQuiz(topicId) {
-    document.getElementById('selectedTopic').value = topicId;
-    jumpToQuiz();
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('a[href^="#"]').forEach(link => {
-        link.addEventListener('click', function (e) {
-            const targetId = this.getAttribute('href');
-            
-            if (targetId === '#quiz') {
-                e.preventDefault();
-                jumpToQuiz();
-                return;
-            }
-            
-            const targetEl = document.querySelector(targetId);
-            if (targetEl && document.getElementById('landingPage').style.display !== 'none') {
-                e.preventDefault();
-                targetEl.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-                document.getElementById('mainMenu').classList.remove('show');
-            }
-        });
-    });
-});
-
-function sendMessage(e) {
-    e.preventDefault();
-    alert('Thank you for your message! We will get back to you soon.');
-    e.target.reset();
-}
-
-let quizData = [];
-let currentIndex = 0;
-let totalScore = 0;
-let correctCount = 0;
-let wrongCount = 0;
-let skippedCount = 0;
-let countdown;
-let timeRemaining;
-let secondsPerQ;
-let startTime;
-let elapsedTime = 0;
-let questionStatus = [];
-
-const configPanel = document.querySelector('.config-panel');
-const playPanel = document.querySelector('.play-panel');
-const summaryPanel = document.querySelector('.summary-panel');
-
-document.getElementById('btnBegin').addEventListener('click', initQuiz);
-document.getElementById('btnNext').addEventListener('click', moveToNext);
-document.getElementById('btnRestart').addEventListener('click', resetQuiz);
-
-async function initQuiz() {
-    const topic = document.getElementById('selectedTopic').value;
-    const level = document.getElementById('levelChoice').value;
-    const qCount = document.getElementById('questionCount').value;
-    secondsPerQ = parseInt(document.getElementById('timeLimit').value);
-
-    let apiUrl = `https://opentdb.com/api.php?amount=${qCount}&type=multiple`;
-    if (topic) apiUrl += `&category=${topic}`;
-    if (level) apiUrl += `&difficulty=${level}`;
-
-    try {
-        configPanel.innerHTML = '<div class="loading">Loading questions...</div>';
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(apiUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        
-        const result = await response.json();
-
-        if (result.response_code !== 0) {
-            throw new Error('Failed to fetch questions');
-        }
-
-        quizData = result.results.map(item => {
-            const allChoices = [...item.incorrect_answers, item.correct_answer];
-            for (let i = allChoices.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
-            }
-
-            return {
-                question: cleanHTML(item.question),
-                answers: allChoices.map(ans => cleanHTML(ans)),
-                correctAnswer: cleanHTML(item.correct_answer),
-                difficulty: item.difficulty
-            };
-        });
-
-        quizData.sort(() => Math.random() - 0.5);
-        questionStatus = new Array(quizData.length).fill('unanswered');
-
-        configPanel.classList.remove('show');
-        playPanel.classList.add('show');
-        showQuestion();
-    } catch (error) {
-        configPanel.innerHTML = `
-            <div class="error">Failed to load questions. Please check your connection and try again.</div>
-            <button onclick="location.reload()">Retry</button>
-        `;
+const quizData = [
+    {
+        question: 'What is the capital of France?',
+        answers: ['Madrid', 'Berlin', 'Paris', 'Rome'],
+        correctAnswer: 'Paris'
+    },
+    {
+        question: 'Which planet is known as the Red Planet?',
+        answers: ['Earth', 'Mars', 'Jupiter', 'Venus'],
+        correctAnswer: 'Mars'
+    },
+    {
+        question: 'Which language is used for styling web pages?',
+        answers: ['HTML', 'Python', 'CSS', 'Java'],
+        correctAnswer: 'CSS'
+    },
+    {
+        question: 'What is the largest ocean on Earth?',
+        answers: ['Atlantic Ocean', 'Indian Ocean', 'Arctic Ocean', 'Pacific Ocean'],
+        correctAnswer: 'Pacific Ocean'
+    },
+    {
+        question: 'Which element has the chemical symbol O?',
+        answers: ['Gold', 'Oxygen', 'Silver', 'Neon'],
+        correctAnswer: 'Oxygen'
     }
-}
+]
 
-function cleanHTML(text) {
-    const temp = document.createElement('textarea');
-    temp.innerHTML = text;
-    return temp.value;
+let currentIndex = 0
+let score = 0
+let correctCount = 0
+
+startBtn.addEventListener('click', startQuiz)
+nextBtn.addEventListener('click', moveToNext)
+retakeBtn.addEventListener('click', startQuiz)
+homeBtn.addEventListener('click', goHome)
+
+function startQuiz() {
+    currentIndex = 0
+    score = 0
+    correctCount = 0
+    startScreen.style.display = 'none'
+    quizScreen.style.display = 'block'
+    resultsScreen.style.display = 'none'
+    showQuestion()
+    updateScore()
 }
 
 function showQuestion() {
-    const current = quizData[currentIndex];
-    startTime = Date.now();
-
-    document.getElementById('qNumber').textContent =
-        `Question ${currentIndex + 1} of ${quizData.length}`;
-    document.getElementById('questionDisplay').textContent = current.question;
-
-    const choicesBox = document.getElementById('answerChoices');
-    choicesBox.innerHTML = '';
-
-    current.answers.forEach(ans => {
-        const choiceEl = document.createElement('div');
-        choiceEl.className = 'choice';
-        choiceEl.textContent = ans;
-        choiceEl.addEventListener('click', () => pickAnswer(ans, choiceEl));
-        choicesBox.appendChild(choiceEl);
-    });
-
-    document.getElementById('btnNext').disabled = true;
-    beginTimer();
+    const current = quizData[currentIndex]
+    questionNumber.textContent = `Question ${currentIndex + 1} of ${quizData.length}`
+    questionText.textContent = current.question
+    optionsContainer.innerHTML = ''
+    feedbackMessage.className = 'feedback-message'
+    feedbackMessage.textContent = ''
+    current.answers.forEach(answer => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'option-btn'
+        button.textContent = answer
+        button.addEventListener('click', () => pickAnswer(button, answer))
+        optionsContainer.appendChild(button)
+    })
+    nextBtn.disabled = true
+    progressFill.style.width = `${Math.round((currentIndex / quizData.length) * 100)}%`
 }
 
-function beginTimer() {
-    timeRemaining = secondsPerQ;
-    refreshTimer();
-
-    countdown = setInterval(() => {
-        timeRemaining--;
-        refreshTimer();
-
-        if (timeRemaining <= 0) {
-            clearInterval(countdown);
-            timeExpired();
-        }
-    }, 1000);
-}
-
-function refreshTimer() {
-    document.getElementById('clockDisplay').textContent = `${timeRemaining}s`;
-    const percent = (timeRemaining / secondsPerQ) * 100;
-    document.getElementById('progressFill').style.width = `${percent}%`;
-}
-
-function pickAnswer(chosen, chosenEl) {
-    if (document.querySelector('.choice.picked')) return;
-
-    clearInterval(countdown);
-    const timeTaken = (Date.now() - startTime) / 1000;
-    elapsedTime += timeTaken;
-
-    const current = quizData[currentIndex];
-    const isRight = chosen === current.correctAnswer;
-
-    chosenEl.classList.add('picked');
-
-    document.querySelectorAll('.choice').forEach(el => {
-        el.style.cursor = 'default';
-        if (el.textContent === current.correctAnswer) {
-            el.classList.add('right');
-        }
-    });
-
-    if (isRight) {
-        correctCount++;
-        questionStatus[currentIndex] = 'correct';
-        const speedBonus = Math.floor((timeRemaining / secondsPerQ) * 10);
-        const diffBonus = current.difficulty === 'hard' ? 15 :
-            current.difficulty === 'medium' ? 10 : 5;
-        totalScore += 10 + speedBonus + diffBonus;
+function pickAnswer(button, answer) {
+    const current = quizData[currentIndex]
+    const buttons = Array.from(optionsContainer.children)
+    buttons.forEach(btn => btn.disabled = true)
+    if (answer === current.correctAnswer) {
+        score += 10
+        correctCount += 1
+        feedbackMessage.classList.add('show', 'correct-feedback')
+        feedbackMessage.textContent = 'Correct!'
+        button.classList.add('correct')
     } else {
-        wrongCount++;
-        questionStatus[currentIndex] = 'wrong';
-        chosenEl.classList.add('wrong');
+        feedbackMessage.classList.add('show', 'incorrect-feedback')
+        feedbackMessage.textContent = `Wrong answer. Correct answer: ${current.correctAnswer}`
+        button.classList.add('incorrect')
+        const correctButton = buttons.find(btn => btn.textContent === current.correctAnswer)
+        if (correctButton) correctButton.classList.add('correct')
     }
-
-    document.getElementById('btnNext').disabled = false;
-}
-
-function timeExpired() {
-    clearInterval(countdown);
-    
-    if (!document.querySelector('.choice.picked')) {
-        skippedCount++;
-        questionStatus[currentIndex] = 'skipped';
-        elapsedTime += secondsPerQ;
-        
-        document.querySelectorAll('.choice').forEach(el => {
-            el.style.cursor = 'default';
-        });
-        
-        document.getElementById('btnNext').disabled = false;
-    }
+    nextBtn.disabled = false
+    updateScore()
 }
 
 function moveToNext() {
-    currentIndex++;
-
+    currentIndex += 1
     if (currentIndex < quizData.length) {
-        showQuestion();
+        showQuestion()
     } else {
-        displayResults();
+        showResults()
     }
 }
 
-function displayResults() {
-    playPanel.classList.remove('show');
-    summaryPanel.classList.add('show');
-
-    const answeredQuestions = correctCount + wrongCount;
-    const percent = answeredQuestions > 0 ? Math.round((correctCount / quizData.length) * 100) : 0;
-    const avgSeconds = answeredQuestions > 0 ? Math.round(elapsedTime / answeredQuestions) : 0;
-
-    document.getElementById('totalPoints').textContent = totalScore;
-    document.getElementById('rightAnswers').textContent = correctCount;
-    document.getElementById('wrongAnswers').textContent = wrongCount;
-    document.getElementById('skippedAnswers').textContent = skippedCount;
-    document.getElementById('percentCorrect').textContent = `${percent}%`;
-    document.getElementById('averageTime').textContent = `${avgSeconds}s`;
+function showResults() {
+    quizScreen.style.display = 'none'
+    resultsScreen.style.display = 'block'
+    const percentage = Math.round((correctCount / quizData.length) * 100)
+    finalScore.textContent = `${percentage}%`
+    resultMessage.textContent = correctCount === quizData.length ? 'Perfect score! 🎉' : correctCount >= 3 ? 'Great job!' : 'Nice try!'
+    correctCountEl.textContent = correctCount
+    totalCountEl.textContent = quizData.length
+    scorePercentageEl.textContent = percentage
 }
 
-function resetQuiz() {
-    clearQuizData();
-    resetConfigPanel();
+function updateScore() {
+    currentScore.textContent = `Score: ${score}`
 }
 
-function clearQuizData() {
-    quizData = [];
-    currentIndex = 0;
-    totalScore = 0;
-    correctCount = 0;
-    wrongCount = 0;
-    skippedCount = 0;
-    elapsedTime = 0;
-    questionStatus = [];
-    clearInterval(countdown);
-    
-    configPanel.classList.add('show');
-    playPanel.classList.remove('show');
-    summaryPanel.classList.remove('show');
-}
-
-function resetConfigPanel() {
-    configPanel.innerHTML = `
-        <div class="input-group">
-            <label for="selectedTopic">Category:</label>
-            <select id="selectedTopic">
-                <option value="">Any Category</option>
-                <option value="9">General Knowledge</option>
-                <option value="10">Books</option>
-                <option value="17">Science & Nature</option>
-                <option value="18">Computers</option>
-                <option value="21">Sports</option>
-                <option value="23">History</option>
-            </select>
-        </div>
-        <div class="input-group">
-            <label for="levelChoice">Difficulty:</label>
-            <select id="levelChoice">
-                <option value="">Any Difficulty</option>
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-            </select>
-        </div>
-        <div class="input-group">
-            <label for="questionCount">Number of Questions (5-20):</label>
-            <input type="number" id="questionCount" min="5" max="20" value="10">
-        </div>
-        <div class="input-group">
-            <label for="timeLimit">Time per Question (seconds):</label>
-            <input type="number" id="timeLimit" min="10" max="120" value="30">
-        </div>
-        <button id="btnBegin">Start Quiz</button>
-    `;
-    document.getElementById('btnBegin').addEventListener('click', initQuiz);
+function goHome() {
+    startScreen.style.display = 'block'
+    quizScreen.style.display = 'none'
+    resultsScreen.style.display = 'none'
+    currentIndex = 0
+    score = 0
+    correctCount = 0
+    updateScore()
 }
